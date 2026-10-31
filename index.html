@@ -1,0 +1,767 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Focus Buddy - Manage Tasks & Focus</title>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        pastel: {
+                            purple: '#E9D5FF',
+                            purpleDark: '#C084FC',
+                            pink: '#FBCFE8',
+                            pinkDark: '#F472B6',
+                            cream: '#FEF3C7',
+                            bg: '#FAF5FF',
+                            text: '#475569'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Prompt', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #FAF5FF; color: #475569; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+
+        // --- Initialize Supabase ---
+        const supabaseUrl = 'https://bosmyroykyviwhnyujoq.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJvc215cm95a3l2aXdobnl1am9xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM0Mjc2MDIsImV4cCI6MjEwOTAwMzYwMn0.nD-DRjt9PGZH4lHOrVQ8chib5a4yYH-u-5eAonX2faY';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+
+        // --- SVGs & Icons ---
+        const IconHome = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+        const IconList = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>;
+        const IconClock = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
+        const IconLogOut = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>;
+        const IconTrash = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
+        const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>;
+        const IconPlus = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+        const IconLoader = () => <svg className="animate-spin -ml-1 mr-2 h-5 w-5 text-current" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>;
+
+        // --- Reusable UI Components ---
+        const Card = ({ children, className = "" }) => (
+            <div className={`bg-white rounded-3xl shadow-sm border border-pastel-purple/30 p-6 ${className}`}>
+                {children}
+            </div>
+        );
+
+        const Button = ({ children, onClick, variant = "primary", className = "", type = "button", disabled = false }) => {
+            const baseStyle = "px-6 py-3 rounded-2xl font-medium transition-all duration-300 flex items-center justify-center gap-2";
+            const activeStyle = disabled ? "opacity-50 cursor-not-allowed" : "hover:-translate-y-1 hover:shadow-lg active:scale-95";
+            const variants = {
+                primary: "bg-pastel-purpleDark text-white hover:bg-purple-500 shadow-md shadow-purple-200",
+                secondary: "bg-pastel-pink text-pink-900 hover:bg-pink-300",
+                outline: "border-2 border-pastel-purple text-pastel-purpleDark hover:bg-pastel-purple/20",
+                ghost: "text-slate-500 hover:bg-slate-100"
+            };
+            return (
+                <button type={type} onClick={onClick} disabled={disabled} className={`${baseStyle} ${variants[variant]} ${activeStyle} ${className}`}>
+                    {children}
+                </button>
+            );
+        };
+
+        // --- Screens ---
+
+        // 1. Login Screen
+        const LoginScreen = ({ onLoginSuccess }) => {
+            const [isRegister, setIsRegister] = useState(false);
+            const [email, setEmail] = useState('');
+            const [password, setPassword] = useState('');
+            const [loading, setLoading] = useState(false);
+            const [errorMsg, setErrorMsg] = useState('');
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setErrorMsg('');
+                
+                if (!email.trim() || !password || loading) return;
+                
+                setLoading(true);
+                try {
+                    let result;
+                    if (isRegister) {
+                        result = await supabase.auth.signUp({
+                            email: email.trim(),
+                            password: password,
+                        });
+                        if (result.data?.user && !result.data?.session) {
+                            setErrorMsg('สมัครสมาชิกสำเร็จ! กรุณาตรวจสอบอีเมลเพื่อยืนยันตัวตน (ถ้าตั้งค่าไว้)');
+                            setIsRegister(false);
+                        }
+                    } else {
+                        result = await supabase.auth.signInWithPassword({
+                            email: email.trim(),
+                            password: password,
+                        });
+                    }
+
+                    if (result.error) throw result.error;
+                    
+                    if (result.data?.session) {
+                        onLoginSuccess(result.data.session.user);
+                    }
+                } catch (error) {
+                    setErrorMsg(error.message === 'Invalid login credentials' ? 'อีเมลหรือรหัสผ่านไม่ถูกต้อง' : error.message);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6 bg-gradient-to-br from-pastel-bg to-pastel-pink/20">
+                    <Card className="w-full max-w-md animate-fade-in relative overflow-hidden">
+                        {loading && (
+                            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-10 flex items-center justify-center text-pastel-purpleDark">
+                                <IconLoader />
+                            </div>
+                        )}
+                        <div className="text-center mb-8">
+                            <div className="w-20 h-20 bg-pastel-purple rounded-3xl mx-auto flex items-center justify-center mb-4 shadow-inner transform transition-transform hover:scale-110 duration-300">
+                                <span className="text-4xl text-pastel-purpleDark font-bold">F</span>
+                            </div>
+                            <h1 className="text-2xl font-bold text-slate-800">Focus Buddy</h1>
+                            <p className="text-slate-500 mt-2">
+                                {isRegister ? 'สร้างบัญชีเพื่อเริ่มต้นจัดระเบียบชีวิตกันเถอะ! ✨' : 'ยินดีต้อนรับกลับมา! พร้อมจะลุยหรือยัง? 🌟'}
+                            </p>
+                        </div>
+
+                        {errorMsg && (
+                            <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-xl text-center border border-red-100">
+                                {errorMsg}
+                            </div>
+                        )}
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">อีเมล</label>
+                                <input 
+                                    type="email" 
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-pastel-purpleDark focus:ring-2 focus:ring-pastel-purple transition-shadow duration-300"
+                                    placeholder="hello@example.com"
+                                    disabled={loading}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-600 mb-1">รหัสผ่าน (ขั้นต่ำ 6 ตัว)</label>
+                                <input 
+                                    type="password" 
+                                    required
+                                    minLength="6"
+                                    value={password}
+                                    onChange={(e) => setPassword(e.target.value)}
+                                    className="w-full px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:border-pastel-purpleDark focus:ring-2 focus:ring-pastel-purple transition-shadow duration-300"
+                                    placeholder="••••••••"
+                                    disabled={loading}
+                                />
+                            </div>
+                            
+                            <Button type="submit" disabled={loading} className="w-full mt-6">
+                                {loading ? 'กำลังโหลด...' : (isRegister ? 'สมัครสมาชิก' : 'เข้าสู่ระบบ')}
+                            </Button>
+                        </form>
+
+                        <div className="mt-6 text-center text-sm text-slate-500">
+                            {isRegister ? 'มีบัญชีอยู่แล้วใช่ไหม?' : "ยังไม่มีบัญชีใช่ไหม?"}{" "}
+                            <button 
+                                onClick={() => { setIsRegister(!isRegister); setErrorMsg(''); }}
+                                className="text-pastel-purpleDark font-semibold hover:underline hover:text-purple-600 transition-colors"
+                                disabled={loading}
+                            >
+                                {isRegister ? 'เข้าสู่ระบบเลย' : 'สมัครสมาชิกเลย'}
+                            </button>
+                        </div>
+                    </Card>
+                </div>
+            );
+        };
+
+        // 2. Dashboard Screen
+        const DashboardScreen = ({ tasks, user, loadingTasks }) => {
+            const totalTasks = tasks.length;
+            const completedTasks = tasks.filter(t => t.completed).length;
+            const pendingTasks = totalTasks - completedTasks;
+            const progress = totalTasks === 0 ? 0 : Math.round((completedTasks / totalTasks) * 100);
+
+            const todayTasks = tasks.filter(t => !t.completed).slice(0, 3);
+            const displayName = user?.email ? user.email.split('@')[0] : 'คุณ';
+
+            if (loadingTasks) {
+                return (
+                    <div className="space-y-6 pb-20 md:pb-0 animate-fade-in flex flex-col items-center justify-center h-64 text-pastel-purpleDark">
+                        <IconLoader />
+                        <p className="text-slate-500 mt-2 text-sm">กำลังโหลดข้อมูลแดชบอร์ด...</p>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="space-y-6 pb-20 md:pb-0 animate-fade-in">
+                    <header className="mb-8 pr-12 md:pr-0">
+                        <div className="flex items-center gap-3">
+                            <h1 className="text-2xl font-bold text-slate-800 break-all">สวัสดี, {displayName}! 👋</h1>
+                            <div className="flex items-center gap-1.5 px-2.5 py-1 bg-green-100 rounded-full shrink-0">
+                                <span className="relative flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-green-500"></span>
+                                </span>
+                                <span className="text-[11px] font-bold text-green-700">ออนไลน์</span>
+                            </div>
+                        </div>
+                        <p className="text-slate-500 mt-1">นี่คือภาพรวมความคืบหน้าของวันนี้ ลุยเลย! 🚀</p>
+                    </header>
+
+                    <Card className="bg-gradient-to-r from-pastel-purple to-pastel-pink border-none transform transition-transform hover:scale-[1.02] duration-300">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-lg font-semibold text-purple-900">ความคืบหน้าวันนี้</h2>
+                            <span className="text-2xl font-bold text-purple-900">{progress}%</span>
+                        </div>
+                        <div className="w-full bg-white/50 rounded-full h-3 mb-2 overflow-hidden">
+                            <div className="bg-purple-600 h-3 rounded-full transition-all duration-1000 ease-out" style={{ width: `${progress}%` }}></div>
+                        </div>
+                        <p className="text-sm text-purple-800 opacity-80">
+                            ทำเสร็จแล้ว {completedTasks} จากทั้งหมด {totalTasks} งาน
+                        </p>
+                    </Card>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <Card className="text-center p-4 hover:bg-slate-50 transition-colors">
+                            <div className="text-3xl font-bold text-slate-800 mb-1">{pendingTasks}</div>
+                            <div className="text-sm text-slate-500 font-medium">งานที่ต้องทำ 📝</div>
+                        </Card>
+                        <Card className="text-center p-4 hover:bg-slate-50 transition-colors">
+                            <div className="text-3xl font-bold text-pastel-purpleDark mb-1">{completedTasks}</div>
+                            <div className="text-sm text-slate-500 font-medium">ทำเสร็จแล้ว ✅</div>
+                        </Card>
+                    </div>
+
+                    <div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            งานต่อไป <span className="text-xl">🎯</span>
+                        </h3>
+                        {todayTasks.length > 0 ? (
+                            <div className="space-y-3">
+                                {todayTasks.map(task => (
+                                    <div key={task.id} className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center justify-between transform transition-all hover:-translate-y-1 hover:shadow-md">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`w-3 h-3 rounded-full shadow-sm shrink-0 ${
+                                                task.priority === 'high' ? 'bg-red-400' : 
+                                                task.priority === 'med' ? 'bg-yellow-400' : 'bg-green-400'
+                                            }`}></div>
+                                            <span className="font-medium text-slate-700">{task.title}</span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center p-8 bg-white rounded-3xl border border-slate-100 border-dashed transform transition-all hover:bg-slate-50">
+                                <p className="text-slate-500 text-lg">ไม่มีงานค้างแล้ว เย้! 🎉</p>
+                                <p className="text-sm text-slate-400 mt-2">ไปพักผ่อนหรือหาอะไรอร่อยๆ กินกันเถอะ</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. Task Management Screen
+        const TasksScreen = ({ tasks, setTasks, user, loadingTasks, tasksError }) => {
+            const [newTaskTitle, setNewTaskTitle] = useState('');
+            const [priority, setPriority] = useState('low');
+            const [isAdding, setIsAdding] = useState(false);
+            const [processingIds, setProcessingIds] = useState([]); // เพื่อป้องกันการกดปุ่มซ้ำสำหรับแต่ละงาน
+
+            const addTask = async (e) => {
+                e.preventDefault();
+                if (!newTaskTitle.trim() || !user || isAdding) return;
+                
+                setIsAdding(true);
+                try {
+                    const { data, error } = await supabase
+                        .from('tasks')
+                        .insert([
+                            { title: newTaskTitle.trim(), priority: priority, user_id: user.id }
+                        ])
+                        .select();
+
+                    if (error) throw error;
+                    if (data) {
+                        setTasks([data[0], ...tasks]);
+                        setNewTaskTitle('');
+                        setPriority('low');
+                    }
+                } catch (error) {
+                    console.error('Error adding task:', error.message);
+                    alert('เกิดข้อผิดพลาดในการเพิ่มงาน');
+                } finally {
+                    setIsAdding(false);
+                }
+            };
+
+            const toggleTask = async (id) => {
+                if (processingIds.includes(id)) return;
+                const taskToUpdate = tasks.find(t => t.id === id);
+                if (!taskToUpdate) return;
+                
+                setProcessingIds(prev => [...prev, id]);
+                
+                // Optimistic UI update
+                setTasks(tasks.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
+
+                try {
+                    const { error } = await supabase
+                        .from('tasks')
+                        .update({ completed: !taskToUpdate.completed })
+                        .eq('id', id)
+                        .eq('user_id', user.id);
+
+                    if (error) throw error;
+                } catch (error) {
+                    console.error('Error updating task:', error.message);
+                    // Revert on error
+                    setTasks(tasks.map(t => t.id === id ? { ...t, completed: taskToUpdate.completed } : t));
+                } finally {
+                    setProcessingIds(prev => prev.filter(p => p !== id));
+                }
+            };
+
+            const deleteTask = async (id) => {
+                if (processingIds.includes(id)) return;
+                setProcessingIds(prev => [...prev, id]);
+
+                // Optimistic UI update
+                const previousTasks = [...tasks];
+                setTasks(tasks.filter(t => t.id !== id));
+
+                try {
+                    const { error } = await supabase
+                        .from('tasks')
+                        .delete()
+                        .eq('id', id)
+                        .eq('user_id', user.id);
+
+                    if (error) throw error;
+                } catch (error) {
+                    console.error('Error deleting task:', error.message);
+                    // Revert on error
+                    setTasks(previousTasks);
+                } finally {
+                    setProcessingIds(prev => prev.filter(p => p !== id));
+                }
+            };
+
+            return (
+                <div className="space-y-6 pb-24 md:pb-0 h-full flex flex-col animate-fade-in">
+                    <header className="pr-12 md:pr-0">
+                        <h1 className="text-2xl font-bold text-slate-800">จัดการงาน 📋</h1>
+                        <p className="text-slate-500 mt-1">จัดระเบียบและลำดับความสำคัญของงานคุณ</p>
+                    </header>
+
+                    <Card className="!p-4 shrink-0 relative">
+                        {isAdding && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-3xl z-10"></div>}
+                        <form onSubmit={addTask} className="flex flex-col sm:flex-row gap-3">
+                            <input 
+                                type="text"
+                                value={newTaskTitle}
+                                onChange={(e) => setNewTaskTitle(e.target.value)}
+                                placeholder="วันนี้ต้องทำอะไรบ้างนะ? ✨"
+                                disabled={isAdding || loadingTasks}
+                                className="flex-1 px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pastel-purple transition-shadow duration-300"
+                            />
+                            <div className="flex gap-2">
+                                <select 
+                                    value={priority}
+                                    onChange={(e) => setPriority(e.target.value)}
+                                    disabled={isAdding || loadingTasks}
+                                    className="flex-1 sm:flex-none px-4 py-3 rounded-2xl bg-slate-50 border border-slate-200 focus:outline-none focus:ring-2 focus:ring-pastel-purple text-sm cursor-pointer transition-shadow"
+                                >
+                                    <option value="low">สำคัญ: ต่ำ</option>
+                                    <option value="med">สำคัญ: ปานกลาง</option>
+                                    <option value="high">สำคัญ: สูง 🔥</option>
+                                </select>
+                                <Button type="submit" disabled={isAdding || loadingTasks} className="!px-4 shrink-0">
+                                    {isAdding ? <div className="text-white"><IconLoader /></div> : <IconPlus />}
+                                </Button>
+                            </div>
+                        </form>
+                    </Card>
+
+                    <div className="flex-1 overflow-y-auto hide-scrollbar space-y-3 mt-4 pb-10">
+                        {loadingTasks ? (
+                            <div className="text-center p-10 flex flex-col items-center justify-center h-40 text-pastel-purpleDark">
+                                <IconLoader />
+                                <p className="text-slate-500 mt-2 text-sm">กำลังโหลดข้อมูลงาน...</p>
+                            </div>
+                        ) : tasksError ? (
+                            <div className="text-center p-10 flex flex-col items-center justify-center h-40">
+                                <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center text-3xl mb-4 text-red-500">⚠️</div>
+                                <h3 className="text-lg font-medium text-red-600">เกิดข้อผิดพลาด</h3>
+                                <p className="text-red-400 text-sm mt-1">{tasksError}</p>
+                            </div>
+                        ) : tasks.length === 0 ? (
+                            <div className="text-center p-10 flex flex-col items-center justify-center h-40">
+                                <div className="w-16 h-16 bg-pastel-cream rounded-full flex items-center justify-center text-3xl mb-4 animate-bounce">📝</div>
+                                <h3 className="text-lg font-medium text-slate-700">ยังไม่มีงานเลย</h3>
+                                <p className="text-slate-500 text-sm mt-1">เพิ่มงานใหม่ด้านบนเพื่อเริ่มต้นได้เลยนะ!</p>
+                            </div>
+                        ) : (
+                            tasks.map(task => {
+                                const isProcessing = processingIds.includes(task.id);
+                                return (
+                                    <div key={task.id} className={`group bg-white p-4 rounded-2xl border ${task.completed ? 'border-slate-100 opacity-60' : 'border-pastel-purple/30 shadow-sm'} flex items-center gap-4 transition-all duration-300 ${!isProcessing && 'hover:shadow-md'} ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                                        <button 
+                                            onClick={() => toggleTask(task.id)}
+                                            disabled={isProcessing}
+                                            className={`w-7 h-7 rounded-full border-2 flex items-center justify-center shrink-0 transition-all duration-300 transform active:scale-75 ${
+                                                task.completed ? 'bg-pastel-purpleDark border-pastel-purpleDark text-white scale-110' : 'border-slate-300 text-transparent hover:border-pastel-purpleDark hover:scale-110'
+                                            }`}
+                                        >
+                                            <IconCheck />
+                                        </button>
+                                        
+                                        <div className="flex-1 min-w-0">
+                                            <p className={`font-medium truncate transition-all duration-300 ${task.completed ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                                {task.title}
+                                            </p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-[10px] font-bold px-2.5 py-0.5 rounded-full shadow-sm ${
+                                                    task.priority === 'high' ? 'bg-red-100 text-red-600' :
+                                                    task.priority === 'med' ? 'bg-yellow-100 text-yellow-700' :
+                                                    'bg-green-100 text-green-700'
+                                                }`}>
+                                                    ความสำคัญ: {task.priority === 'high' ? 'สูง' : task.priority === 'med' ? 'ปานกลาง' : 'ต่ำ'}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        <button 
+                                            onClick={() => deleteTask(task.id)}
+                                            disabled={isProcessing}
+                                            className="text-slate-300 hover:text-red-500 hover:bg-red-50 p-2 rounded-full shrink-0 transition-all duration-300 opacity-100 sm:opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95 disabled:opacity-50"
+                                        >
+                                            <IconTrash />
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. Focus Timer Screen (Stateless Component - Data from Props)
+        const TimerScreen = ({ 
+            time, setTime, isActive, setIsActive, 
+            selectedDuration, setSelectedDuration, showNotification 
+        }) => {
+            const toggleTimer = () => setIsActive(!isActive);
+
+            const resetTimer = () => {
+                setIsActive(false);
+                setTime(selectedDuration * 60);
+            };
+
+            const setDuration = (mins) => {
+                setIsActive(false);
+                setSelectedDuration(mins);
+                setTime(mins * 60);
+            };
+
+            const formatTime = (seconds) => {
+                const m = Math.floor(seconds / 60);
+                const s = seconds % 60;
+                return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            };
+
+            const totalSeconds = selectedDuration * 60;
+            const progress = ((totalSeconds - time) / totalSeconds) * 100;
+            const circleRadius = 120;
+            const circumference = 2 * Math.PI * circleRadius;
+            const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+            return (
+                <div className="h-full flex flex-col pb-24 md:pb-0 animate-fade-in relative">
+                    <header className="mb-6 text-center pr-12 md:pr-0">
+                        <h1 className="text-2xl font-bold text-slate-800">จับเวลาโฟกัส ⏱️</h1>
+                        <p className="text-slate-500 mt-1">ค่อยๆ ทำไปทีละอย่างนะ สู้ๆ ✌️</p>
+                        
+                        <div className="h-6 mt-2 flex justify-center items-center">
+                            {isActive && (
+                                <div className="flex items-center gap-2 bg-pastel-pink/30 px-3 py-1 rounded-full animate-pulse">
+                                    <span className="relative flex h-2.5 w-2.5">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pastel-pinkDark opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pastel-pinkDark"></span>
+                                    </span>
+                                    <span className="text-pastel-pinkDark font-bold text-xs">กำลังโฟกัส... ทำได้ดีมาก!</span>
+                                </div>
+                            )}
+                        </div>
+                    </header>
+
+                    {showNotification && (
+                        <div className="absolute top-0 left-0 right-0 bg-green-100 text-green-800 p-4 rounded-2xl text-center font-medium shadow-sm animate-fade-in z-10 border border-green-200">
+                            🎉 หมดเวลาแล้ว! เก่งมากเลย พักสายตาสักหน่อยนะ ☕
+                        </div>
+                    )}
+
+                    <div className="flex-1 flex flex-col items-center justify-center">
+                        <div className="relative w-72 h-72 flex items-center justify-center mb-8 transform transition-transform hover:scale-105 duration-500">
+                            <svg className="transform -rotate-90 w-full h-full absolute top-0 left-0 drop-shadow-md">
+                                <circle 
+                                    cx="144" cy="144" r={circleRadius} 
+                                    stroke="currentColor" strokeWidth="8" fill="transparent" 
+                                    className="text-white"
+                                />
+                                <circle 
+                                    cx="144" cy="144" r={circleRadius} 
+                                    stroke="currentColor" strokeWidth="8" fill="transparent" 
+                                    strokeDasharray={circumference}
+                                    strokeDashoffset={strokeDashoffset}
+                                    className="text-pastel-purpleDark transition-all duration-1000 ease-linear"
+                                />
+                            </svg>
+                            <div className="text-6xl font-bold text-slate-800 tracking-tighter">
+                                {formatTime(time)}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-100">
+                            {[5, 10, 25].map(mins => (
+                                <button
+                                    key={mins}
+                                    onClick={() => setDuration(mins)}
+                                    disabled={isActive}
+                                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 ${
+                                        selectedDuration === mins 
+                                        ? 'bg-pastel-cream text-yellow-800 shadow-sm scale-105' 
+                                        : 'text-slate-500 hover:bg-slate-50 hover:scale-105'
+                                    } ${isActive ? 'opacity-50 cursor-not-allowed transform-none' : 'active:scale-95'}`}
+                                >
+                                    {mins} นาที
+                                </button>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-4">
+                            <Button 
+                                onClick={toggleTimer} 
+                                variant={isActive ? "secondary" : "primary"}
+                                className="w-32"
+                            >
+                                {isActive ? 'พักก่อน ⏸️' : (time < selectedDuration * 60 ? 'ทำต่อ ▶️' : 'เริ่มเลย 🚀')}
+                            </Button>
+                            <Button onClick={resetTimer} variant="ghost" className="w-14 !px-0 bg-white shadow-sm border border-slate-100 text-slate-400 hover:text-slate-600">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component (Layout & Routing) ---
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [loadingAuth, setLoadingAuth] = useState(true);
+            const [currentView, setCurrentView] = useState('dashboard');
+            const [tasks, setTasks] = useState([]);
+            
+            const [loadingTasks, setLoadingTasks] = useState(false);
+            const [tasksError, setTasksError] = useState('');
+            
+            // Global Timer State
+            const [time, setTime] = useState(25 * 60);
+            const [isActive, setIsActive] = useState(false);
+            const [selectedDuration, setSelectedDuration] = useState(25);
+            const [showNotification, setShowNotification] = useState(false);
+
+            // Check Active Session on Mount
+            useEffect(() => {
+                supabase.auth.getSession().then(({ data: { session } }) => {
+                    setUser(session?.user ?? null);
+                    setLoadingAuth(false);
+                });
+
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+                    setUser(session?.user ?? null);
+                });
+
+                return () => subscription.unsubscribe();
+            }, []);
+
+            // Fetch Tasks when User changes
+            useEffect(() => {
+                if (user) {
+                    const fetchTasks = async () => {
+                        setLoadingTasks(true);
+                        setTasksError('');
+                        const { data, error } = await supabase
+                            .from('tasks')
+                            .select('*')
+                            .order('created_at', { ascending: false });
+                        
+                        if (error) {
+                            console.error('Fetch tasks error:', error.message);
+                            setTasksError('ไม่สามารถโหลดข้อมูลงานได้ โปรดลองใหม่อีกครั้ง');
+                        } else if (data) {
+                            setTasks(data);
+                        }
+                        setLoadingTasks(false);
+                    };
+                    fetchTasks();
+                } else {
+                    setTasks([]); // Clear tasks on logout
+                }
+            }, [user]);
+
+            // Timer Logic
+            useEffect(() => {
+                let interval = null;
+                if (isActive && time > 0) {
+                    interval = setInterval(() => {
+                        setTime((t) => t - 1);
+                    }, 1000);
+                } else if (isActive && time === 0) {
+                    setIsActive(false);
+                    setShowNotification(true);
+                    setTimeout(() => setShowNotification(false), 5000);
+                }
+                return () => clearInterval(interval);
+            }, [isActive, time]);
+
+            const handleLogout = async () => {
+                await supabase.auth.signOut();
+                setIsActive(false);
+                setTime(25 * 60);
+                setSelectedDuration(25);
+            };
+
+            if (loadingAuth) {
+                return (
+                    <div className="min-h-screen flex flex-col items-center justify-center bg-pastel-bg text-pastel-purpleDark">
+                        <IconLoader />
+                        <span className="mt-4 text-slate-500 font-medium">กำลังตรวจสอบข้อมูลผู้ใช้...</span>
+                    </div>
+                );
+            }
+
+            if (!user) {
+                return <LoginScreen onLoginSuccess={setUser} />;
+            }
+
+            const NavItem = ({ view, icon: Icon, label }) => {
+                const isSelected = currentView === view;
+                return (
+                    <button 
+                        onClick={() => setCurrentView(view)}
+                        className={`flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:px-4 md:py-3 rounded-2xl transition-all duration-300 hover:scale-[1.03] active:scale-95 ${
+                            isSelected 
+                            ? 'text-pastel-purpleDark bg-pastel-purple/20 font-semibold shadow-inner' 
+                            : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                        }`}
+                    >
+                        <div className="relative">
+                            <Icon />
+                            {view === 'timer' && isActive && !isSelected && (
+                                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-pastel-pinkDark opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-pastel-pinkDark"></span>
+                                </span>
+                            )}
+                        </div>
+                        <span className="text-xs md:text-sm">{label}</span>
+                    </button>
+                );
+            };
+
+            return (
+                <div className="min-h-screen bg-pastel-bg flex justify-center selection:bg-pastel-pink selection:text-pink-900">
+                    <div className="w-full max-w-md bg-pastel-bg min-h-screen relative flex flex-col md:max-w-4xl md:flex-row shadow-2xl shadow-purple-900/5">
+                        
+                        {/* Mobile Header Logout */}
+                        <div className="md:hidden absolute top-6 right-6 z-50">
+                            <button onClick={handleLogout} className="p-2 text-slate-400 bg-white rounded-full shadow-sm hover:text-red-500 hover:bg-red-50 transition-all duration-300 hover:scale-110 active:scale-95">
+                                <IconLogOut />
+                            </button>
+                        </div>
+
+                        {/* Sidebar (Desktop) / Bottom Nav (Mobile) */}
+                        <nav className="fixed bottom-0 w-full max-w-md md:max-w-none md:relative md:w-64 bg-white md:bg-transparent border-t md:border-t-0 md:border-r border-slate-100 md:border-slate-200 z-40 p-4 md:p-6 flex md:flex-col justify-around md:justify-start gap-2 shadow-[0_-10px_40px_rgba(0,0,0,0.03)] md:shadow-none pb-safe">
+                            <div className="hidden md:flex items-center gap-3 mb-10 px-2 group cursor-pointer">
+                                <div className="w-10 h-10 bg-pastel-purple rounded-xl flex items-center justify-center text-pastel-purpleDark font-bold text-xl transition-transform group-hover:rotate-12 duration-300">F</div>
+                                <span className="font-bold text-lg text-slate-800">Focus Buddy</span>
+                            </div>
+
+                            <NavItem view="dashboard" icon={IconHome} label="แดชบอร์ด" />
+                            <NavItem view="tasks" icon={IconList} label="จัดการงาน" />
+                            <NavItem view="timer" icon={IconClock} label="จับเวลา" />
+                            
+                            <div className="hidden md:block mt-auto">
+                                <button 
+                                    onClick={handleLogout}
+                                    className="flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300 w-full hover:-translate-y-1 active:scale-95"
+                                >
+                                    <IconLogOut />
+                                    <span className="text-sm font-medium">ออกจากระบบ</span>
+                                </button>
+                            </div>
+                        </nav>
+
+                        {/* Main Content Area */}
+                        <main className="flex-1 p-6 md:p-10 overflow-y-auto h-screen relative">
+                            {currentView === 'dashboard' && <DashboardScreen tasks={tasks} user={user} loadingTasks={loadingTasks} />}
+                            {currentView === 'tasks' && <TasksScreen tasks={tasks} setTasks={setTasks} user={user} loadingTasks={loadingTasks} tasksError={tasksError} />}
+                            {currentView === 'timer' && (
+                                <TimerScreen 
+                                    time={time} setTime={setTime}
+                                    isActive={isActive} setIsActive={setIsActive}
+                                    selectedDuration={selectedDuration} setSelectedDuration={setSelectedDuration}
+                                    showNotification={showNotification}
+                                />
+                            )}
+                        </main>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
